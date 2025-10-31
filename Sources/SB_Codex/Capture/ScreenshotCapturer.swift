@@ -14,20 +14,24 @@ enum ScreenshotError: Error {
 }
 
 final class ScreenshotCapturer {
-    private let displayID: CGDirectDisplayID
+    private let defaultDisplayID: CGDirectDisplayID
     private let cropSize: CGSize?
 
     init(displayID: CGDirectDisplayID = CGMainDisplayID(), cropSize: CGSize? = CGSize(width: 900, height: 650)) {
-        self.displayID = displayID
+        self.defaultDisplayID = displayID
         self.cropSize = cropSize
     }
 
     func capture(around location: CGPoint, screenSize: CGSize, scale: CGFloat) throws -> ScreenshotArtifact {
+        let screen = NSScreen.screens.first { NSPointInRect(location, $0.frame) } ?? NSScreen.main
+        let resolvedDisplayID = screen?
+            .deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        let displayID = resolvedDisplayID.map { CGDirectDisplayID($0.uint32Value) } ?? defaultDisplayID
+
         guard let cgImage = CGDisplayCreateImage(displayID) else {
             throw ScreenshotError.captureFailed
         }
 
-        let screen = NSScreen.screens.first { NSPointInRect(location, $0.frame) } ?? NSScreen.main
         let screenFrame = screen?.frame ?? CGRect(origin: .zero, size: screenSize)
         let screenScale = screen?.backingScaleFactor ?? scale
 
