@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fairyOverlay = FairyOverlayController()
     private let anchorManager = OverlayAnchorManager()
     private var overlayEnabled = true
+    private var overlayPreferenceBeforeAccessibility: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         notificationDispatcher.configure()
@@ -37,13 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         fairyOverlay.isEnabled = overlayEnabled
         menuController.overlayToggleHandler = { [weak self] isEnabled in
             guard let self else { return }
+            guard self.appController.interactionMode != .accessibility else {
+                self.menuController.updateOverlayEnabled(false)
+                self.overlayEnabled = false
+                return
+            }
             overlayEnabled = isEnabled
             fairyOverlay.isEnabled = isEnabled
             if !isEnabled {
                 fairyOverlay.hide(animated: true)
             }
         }
-
         appController.commentaryHandler = { [weak self] result in
             guard let self else { return }
             switch result {
@@ -94,9 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fairyOverlay.hide(animated: true)
             }
         }
+        appController.modeChangeHandler = { [weak self] _ in
+            self?.applyInteractionMode()
+            self?.menuController.refresh()
+        }
 
         appController.start()
         menuController.setupMenuBarItem()
+        applyInteractionMode(initial: true)
 
         hotkeyManager.handler = { [weak self] in
             DispatchQueue.main.async {
@@ -115,5 +125,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         fairyOverlay.hide(animated: false)
         appController.stop()
+    }
+
+    private func applyInteractionMode(initial: Bool = false) {
+        guard menuController != nil else { return }
+        let mode = appController.interactionMode
+        switch mode {
+        case .casual:
+            if let previous = overlayPreferenceBeforeAccessibility {
+                overlayEnabled = previous
+                overlayPreferenceBeforeAccessibility = nil
+            }
+            fairyOverlay.isEnabled = overlayEnabled
+            if !overlayEnabled {
+                fairyOverlay.hide(animated: true)
+            }
+            menuController.updateOverlayEnabled(overlayEnabled)
+        case .focus:
+            if let previous = overlayPreferenceBeforeAccessibility {
+                overlayEnabled = previous
+                overlayPreferenceBeforeAccessibility = nil
+            }
+            fairyOverlay.isEnabled = overlayEnabled
+            if !overlayEnabled {
+                fairyOverlay.hide(animated: true)
+            }
+            menuController.updateOverlayEnabled(overlayEnabled)
+        case .accessibility:
+            if overlayPreferenceBeforeAccessibility == nil {
+                overlayPreferenceBeforeAccessibility = overlayEnabled
+            }
+            overlayEnabled = false
+            fairyOverlay.isEnabled = false
+            fairyOverlay.hide(animated: true)
+            menuController.updateOverlayEnabled(false)
+        }
+
+        guard !initial else { return }
+        let message: String
+        switch mode {
+        case .casual:
+            message = "Mode set to Casual. Commentary stays friendly."
+        case .focus:
+            message = "Mode set to Focus. Expect punchier, task-oriented tips."
+        case .accessibility:
+            message = "Mode set to Accessibility. Overlay hidden for clearer narration."
+        }
+        notificationDispatcher.deliver(body: message)
     }
 }

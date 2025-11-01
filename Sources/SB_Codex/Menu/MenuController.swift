@@ -28,12 +28,19 @@ final class MenuController {
         menu.addItem(NSMenuItem(title: toggleTitle, action: #selector(toggleActive), keyEquivalent: "p"))
         let overlayItem = NSMenuItem(title: overlayEnabled ? "Hide Fairy Overlay" : "Show Fairy Overlay", action: #selector(toggleOverlay), keyEquivalent: "o")
         overlayItem.target = self
+        overlayItem.isEnabled = appController.interactionMode != .accessibility
         menu.addItem(overlayItem)
         menu.addItem(.separator())
 
         let providerItem = NSMenuItem(title: "AI: \(appController.providerSummary)", action: nil, keyEquivalent: "")
         providerItem.isEnabled = false
         menu.addItem(providerItem)
+
+        let modeMenuItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
+        modeMenuItem.isEnabled = true
+        modeMenuItem.submenu = buildModeSubmenu()
+        menu.addItem(modeMenuItem)
+
         if let stats = appController.tokenUsageStats {
             if let last = stats.last {
                 let lastItem = NSMenuItem(title: tokensTitle(prefix: "Last", usage: last), action: nil, keyEquivalent: "")
@@ -93,5 +100,26 @@ final class MenuController {
 
     private func tokensTitle(prefix: String, usage: TokenUsage) -> String {
         "Tokens (\(prefix)): in \(usage.promptTokens) • out \(usage.completionTokens) • total \(usage.totalTokens)"
+    }
+
+    private func buildModeSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        for mode in InteractionMode.allCases {
+            let item = NSMenuItem(title: mode.displayName, action: #selector(selectMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = mode == appController.interactionMode ? .on : .off
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
+    @objc private func selectMode(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let mode = InteractionMode(rawValue: rawValue)
+        else { return }
+        appController.updateMode(mode)
+        rebuildMenu()
     }
 }

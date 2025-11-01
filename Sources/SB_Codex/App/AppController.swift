@@ -5,13 +5,13 @@ import Foundation
 final class AppController {
     private let permissionManager = PermissionManager()
     private var cursorMonitor: CursorMonitor?
-    private let captureScheduler = CaptureScheduler()
+    private var captureScheduler: CaptureScheduler
     private let screenshotCapturer = ScreenshotCapturer()
     private let contextProvider = SystemContextProvider()
     private let configurationLoader = ConfigurationLoader()
     private let aiOrchestrator: AIOrchestrator
     private let providerDescriptor: String
-    private let configuration: AppConfiguration
+    private var configuration: AppConfiguration
     private let textAnalyzer = TextAnalyzer()
     private var permissionAlertDisplayed = false
     private var isRequestInFlight = false
@@ -22,6 +22,7 @@ final class AppController {
     private var sessionCompletionTokens = 0
     private var sessionTotalTokens = 0
     private var lastTokenUsage: TokenUsage?
+    private var currentMode: InteractionMode
 
     private(set) var isActive: Bool = false {
         didSet {
@@ -33,10 +34,12 @@ final class AppController {
 
     var commentaryHandler: ((Result<AIResponse, Error>) -> Void)?
     var stateChangeHandler: ((Bool) -> Void)?
+    var modeChangeHandler: ((InteractionMode) -> Void)?
     var providerSummary: String { providerDescriptor }
     var appConfiguration: AppConfiguration { configuration }
     var latestCursorLocation: CGPoint? { lastCursorLocation }
     var latestCaptureMetadata: CaptureMetadata? { lastCaptureMetadata }
+    var interactionMode: InteractionMode { currentMode }
     var tokenUsageStats: TokenUsageStats? {
         guard sessionTotalTokens > 0 else { return nil }
         return TokenUsageStats(
@@ -66,6 +69,9 @@ final class AppController {
             Logger.warning("No OpenAI API key configured. Using mock responses.")
             providerDescriptor = "Mock offline"
         }
+        let initialMode = configuration.interactionMode ?? .casual
+        currentMode = initialMode
+        captureScheduler = CaptureScheduler(configuration: AppController.schedulerConfiguration(for: initialMode))
     }
 
     func start() {
@@ -136,11 +142,12 @@ final class AppController {
             let enrichedMetadata = metadata.updatingHotspots(hotspots)
             self.lastCaptureMetadata = enrichedMetadata
             let orchestrator = aiOrchestrator
+            let mode = currentMode
 
             Task(priority: .userInitiated) { [weak self] in
                 guard let self else { return }
                 do {
-                    let response = try await orchestrator.requestCommentary(for: artifact, metadata: enrichedMetadata)
+                    let response = try await orchestrator.requestCommentary(for: artifact, metadata: enrichedMetadata, mode: mode)
                     self.recordTokenUsage(response.usage)
                     self.dispatchCommentary(result: .success(response))
                 } catch {
@@ -169,12 +176,46 @@ final class AppController {
         commentaryHandler?(result)
     }
 
+    func updateMode(_ mode: InteractionMode) {
+        guard mode != currentMode else { return }
+        currentMode = mode
+        configuration.interactionMode = mode
+        configurationLoader.save(configuration)
+        captureScheduler = CaptureScheduler(configuration: AppController.schedulerConfiguration(for: mode))
+        captureScheduler.reset()
+        sessionPromptTokens = 0
+        sessionCompletionTokens = 0
+        sessionTotalTokens = 0
+        lastTokenUsage = nil
+        Logger.info("Interaction mode switched to \(mode.rawValue).")
+        modeChangeHandler?(mode)
+    }
+
     private func recordTokenUsage(_ usage: TokenUsage?) {
         guard let usage else { return }
         lastTokenUsage = usage
         sessionPromptTokens += usage.promptTokens
         sessionCompletionTokens += usage.completionTokens
         sessionTotalTokens += usage.totalTokens
+    }
+
+    private static func schedulerConfiguration(for mode: InteractionMode) -> CaptureSchedulerConfiguration {
+        switch mode {
+        case .casual:
+            return .default
+        case .focus:
+            return CaptureSchedulerConfiguration(
+                minimumInterval: 12,
+                maximumInterval: 90,
+                minimumMovement: 60
+            )
+        case .accessibility:
+            return CaptureSchedulerConfiguration(
+                minimumInterval: 6,
+                maximumInterval: 75,
+                minimumMovement: 40
+            )
+        }
     }
 
     private func presentPermissionReminder(for status: PermissionStatus) {

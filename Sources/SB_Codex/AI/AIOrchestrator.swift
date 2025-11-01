@@ -7,7 +7,7 @@ actor AIOrchestrator {
         self.provider = provider
     }
 
-    func requestCommentary(for artifact: ScreenshotArtifact, metadata: CaptureMetadata) async throws -> AIResponse {
-        try await provider.sendContext(imageData: artifact.pngData, metadata: metadata)
+    func requestCommentary(for artifact: ScreenshotArtifact, metadata: CaptureMetadata, mode: InteractionMode) async throws -> AIResponse {
+        try await provider.sendContext(imageData: artifact.pngData, metadata: metadata, mode: mode)
     }
 }

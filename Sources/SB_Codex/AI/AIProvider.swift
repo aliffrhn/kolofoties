@@ -41,5 +41,5 @@ extension AIProviderError: LocalizedError {
 }
 
 protocol AIProvider: Sendable {
-    func sendContext(imageData: Data, metadata: CaptureMetadata) async throws -> AIResponse
+    func sendContext(imageData: Data, metadata: CaptureMetadata, mode: InteractionMode) async throws -> AIResponse
 }

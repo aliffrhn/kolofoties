@@ -6,7 +6,6 @@ final class FairyOverlayController {
     private let window: NSWindow
     private let textField: NSTextField
     private let backgroundView: NSVisualEffectView
-    private let tailLayer = CAShapeLayer()
     private var hideWorkItem: DispatchWorkItem?
     private var currentSize: CGSize = CGSize(width: 220, height: 120)
     private var isSpeaking: Bool = false
@@ -37,19 +36,25 @@ final class FairyOverlayController {
         window.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .canJoinAllSpaces]
 
         backgroundView = NSVisualEffectView(frame: NSRect(origin: .zero, size: contentSize))
-        backgroundView.material = .hudWindow
+        backgroundView.material = .contentBackground
+        backgroundView.blendingMode = .withinWindow
         backgroundView.state = .active
         backgroundView.wantsLayer = true
-        backgroundView.layer?.cornerRadius = contentSize.height / 2
-        backgroundView.layer?.maskedCorners = [.layerMaxXMaxYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMinXMinYCorner]
-        backgroundView.layer?.borderColor = NSColor(calibratedRed: 0.7, green: 0.6, blue: 1.0, alpha: 0.6).cgColor
-        backgroundView.layer?.borderWidth = 1.2
+        backgroundView.layer?.cornerRadius = 18
+        backgroundView.layer?.maskedCorners = [
+            .layerMinXMinYCorner,
+            .layerMinXMaxYCorner,
+            .layerMaxXMinYCorner,
+            .layerMaxXMaxYCorner
+        ]
+        backgroundView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 0.85).cgColor
+        backgroundView.layer?.borderWidth = 0
         backgroundView.alphaValue = 0.0
 
         textField = NSTextField(labelWithString: "")
-        textField.textColor = .white
+        textField.textColor = NSColor(calibratedWhite: 0.92, alpha: 1.0)
         textField.maximumNumberOfLines = 0
-        textField.font = .systemFont(ofSize: 14, weight: .medium)
+        textField.font = .systemFont(ofSize: 13, weight: .semibold)
         textField.lineBreakMode = .byWordWrapping
         textField.translatesAutoresizingMaskIntoConstraints = false
         textField.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -59,6 +64,10 @@ final class FairyOverlayController {
         contentView.wantsLayer = true
         contentView.layer?.cornerRadius = backgroundView.layer?.cornerRadius ?? 0
         contentView.layer?.masksToBounds = false
+        contentView.layer?.shadowColor = NSColor.black.withAlphaComponent(0.35).cgColor
+        contentView.layer?.shadowOpacity = 1
+        contentView.layer?.shadowRadius = 18
+        contentView.layer?.shadowOffset = CGSize(width: 0, height: -6)
         contentView.addSubview(backgroundView)
         contentView.addSubview(textField)
 
@@ -77,27 +86,19 @@ final class FairyOverlayController {
         ])
 
         window.contentView = contentView
-
-        tailLayer.fillColor = NSColor(calibratedRed: 0.68, green: 0.64, blue: 1.0, alpha: 0.85).cgColor
-        tailLayer.shadowColor = NSColor.black.withAlphaComponent(0.4).cgColor
-        tailLayer.shadowOpacity = 0.4
-        tailLayer.shadowRadius = 3
-        tailLayer.shadowOffset = CGSize(width: 1, height: -1)
-        contentView.layer?.addSublayer(tailLayer)
     }
 
     func showMessage(_ message: String, anchorProvider: (CGSize) -> CGPoint) {
         guard isEnabled else { return }
 
         textField.stringValue = message
-        textField.sizeToFit()
 
-        let maxWidth: CGFloat = 320
-        let minWidth: CGFloat = 220
-        let maxHeight: CGFloat = 180
-        let minHeight: CGFloat = 100
+        let maxWidth: CGFloat = 300
+        let minWidth: CGFloat = 180
+        let maxHeight: CGFloat = 200
+        let minHeight: CGFloat = 96
         let textBounding = textField.attributedStringValue.boundingRect(
-            with: NSSize(width: maxWidth - 32, height: maxHeight - 24),
+            with: NSSize(width: maxWidth - 32, height: maxHeight - 32),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
         let desiredSize = CGSize(
@@ -105,10 +106,10 @@ final class FairyOverlayController {
             height: min(max(textBounding.height + 24, minHeight), maxHeight)
         )
         textField.preferredMaxLayoutWidth = desiredSize.width - 32
+        textField.invalidateIntrinsicContentSize()
         currentSize = desiredSize
 
         let targetOrigin = clampAnchor(anchorProvider(desiredSize), size: desiredSize)
-        updateTailPath(for: desiredSize)
 
         if !window.isVisible {
             window.alphaValue = 0
@@ -116,17 +117,21 @@ final class FairyOverlayController {
         }
 
         repositionWindow(to: targetOrigin, size: desiredSize, animated: true)
-        backgroundView.alphaValue = 1
-        window.alphaValue = 1
+        window.contentView?.layoutSubtreeIfNeeded()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            self.backgroundView.animator().alphaValue = 1
+            self.window.animator().alphaValue = 1
+        }
 
         scheduleHide()
-        addSparkle()
     }
 
     func moveToAnchor(_ anchor: CGPoint, animated: Bool) {
         guard window.isVisible, isEnabled else { return }
         let adjusted = clampAnchor(anchor, size: currentSize)
         repositionWindow(to: adjusted, size: currentSize, animated: animated)
+        window.contentView?.layoutSubtreeIfNeeded()
     }
 
     func beginSpeaking() {
@@ -186,7 +191,7 @@ final class FairyOverlayController {
     }
 
     private func repositionWindow(to origin: CGPoint, size: CGSize, animated: Bool) {
-        let frame = NSRect(origin: origin, size: size)
+        let frame = NSRect(origin: origin, size: size).integral
 
         if animated {
             NSAnimationContext.runAnimationGroup { context in
@@ -197,53 +202,10 @@ final class FairyOverlayController {
         } else {
             window.setFrame(frame, display: true)
         }
-    }
 
-    private func addSparkle() {
-        guard let contentView = window.contentView else { return }
-        let sparkle = CALayer()
-        sparkle.backgroundColor = NSColor(calibratedRed: 0.9, green: 0.8, blue: 1.0, alpha: 0.7).cgColor
-        sparkle.cornerRadius = 3
-        sparkle.frame = CGRect(x: CGFloat.random(in: 10...(contentView.frame.width - 10)), y: contentView.frame.height - 8, width: 6, height: 6)
-
-        contentView.layer?.addSublayer(sparkle)
-
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.duration = 0.6
-        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-
-        let move = CABasicAnimation(keyPath: "position.y")
-        move.byValue = -14
-        move.duration = 0.6
-        move.timingFunction = CAMediaTimingFunction(name: .easeOut)
-
-        let group = CAAnimationGroup()
-        group.animations = [fade, move]
-        group.duration = 0.6
-        group.isRemovedOnCompletion = false
-        group.fillMode = .forwards
-
-        sparkle.add(group, forKey: "sparkleFade")
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
-            sparkle.removeFromSuperlayer()
+        if let layer = window.contentView?.layer {
+            layer.shadowPath = CGPath(roundedRect: CGRect(origin: .zero, size: size), cornerWidth: 18, cornerHeight: 18, transform: nil)
         }
-    }
-
-    private func updateTailPath(for size: CGSize) {
-        let tailWidth: CGFloat = 20
-        let tailHeight: CGFloat = 18
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: tailWidth, y: tailHeight / 2))
-        path.addLine(to: CGPoint(x: 0, y: tailHeight))
-        path.addLine(to: CGPoint(x: 2, y: tailHeight / 2))
-        path.addLine(to: CGPoint(x: 0, y: 0))
-        path.closeSubpath()
-        tailLayer.path = path
-        tailLayer.bounds = CGRect(x: 0, y: 0, width: tailWidth, height: tailHeight)
-        tailLayer.position = CGPoint(x: 12, y: size.height / 2)
     }
 
     private func startFloatAnimation() {

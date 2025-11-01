@@ -1,5 +1,19 @@
 import Foundation
 
+enum InteractionMode: String, Codable, CaseIterable {
+    case casual
+    case focus
+    case accessibility
+
+    var displayName: String {
+        switch self {
+        case .casual: return "Casual"
+        case .focus: return "Focus"
+        case .accessibility: return "Accessibility"
+        }
+    }
+}
+
 struct AppConfiguration: Codable {
     var openAIAPIKey: String?
     var openAIModel: String?
@@ -7,6 +21,7 @@ struct AppConfiguration: Codable {
     var voiceIdentifier: String?
     var voiceRate: Double?
     var voicePitch: Double?
+    var interactionMode: InteractionMode?
 }
 
 final class ConfigurationLoader {
@@ -29,7 +44,8 @@ final class ConfigurationLoader {
             openAIBaseURL: environment["OPENAI_BASE_URL"],
             voiceIdentifier: environment["VOICE_IDENTIFIER"],
             voiceRate: environment["VOICE_RATE"].flatMap(Double.init),
-            voicePitch: environment["VOICE_PITCH"].flatMap(Double.init)
+            voicePitch: environment["VOICE_PITCH"].flatMap(Double.init),
+            interactionMode: environment["INTERACTION_MODE"].flatMap { InteractionMode(rawValue: $0.lowercased()) }
         )
 
         guard config.openAIAPIKey?.isEmpty != false else {
@@ -61,8 +77,15 @@ final class ConfigurationLoader {
             if config.voicePitch == nil {
                 config.voicePitch = decoded.voicePitch
             }
+            if config.interactionMode == nil {
+                config.interactionMode = decoded.interactionMode
+            }
         } catch {
             Logger.error("Failed to load configuration: \(error.localizedDescription)")
+        }
+
+        if config.interactionMode == nil {
+            config.interactionMode = .casual
         }
 
         return config
@@ -80,5 +103,17 @@ final class ConfigurationLoader {
     func configurationFileURL() -> URL {
         ensureDirectoryExists()
         return fileURL
+    }
+
+    func save(_ configuration: AppConfiguration) {
+        ensureDirectoryExists()
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted]
+            let data = try encoder.encode(configuration)
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            Logger.error("Failed to save configuration: \(error.localizedDescription)")
+        }
     }
 }

@@ -10,6 +10,7 @@ A menu bar helper for macOS that watches your cursor in the background, captures
 - A floating "fairy" overlay that glides to self-chosen spots, highlights windows/text it finds interesting, and whispers the same quip (toggleable from the menu bar).
 - Menu bar controls and a `⌃⌥⌘P` global hotkey to pause/resume the pipeline.
 - Permission guidance for Screen Recording & Accessibility.
+- Mode selector (Casual, Focus, Accessibility) that reshapes prompts, cadence, and visuals to match how you want to listen.
 
 ## Requirements
 - macOS 13 or newer (AppKit, AVFoundation, UserNotifications).
@@ -57,6 +58,12 @@ If `swift build` fails due to sandbox restrictions (e.g., when caches under `~/L
 5. Toggle the fairy overlay directly from the ⚡️ menu if you need a quieter desk.
 6. Toggle the pipeline from anywhere with `⌃⌥⌘P`.
 7. For consistent macOS permissions, launch the packaged app at `~/Applications/CursorCompanion.app`. Its bundle path stays constant across rebuilds, so Screen Recording and Accessibility approvals stick.
+8. Switch interaction modes from ⚡️ → Mode to choose between Casual (friendly banter), Focus (directive tips), or Accessibility (spoken descriptions with the overlay tucked away).
+
+## Interaction modes
+- **Casual**: the existing laid-back tone with lively overlay bubbles and quick voice commentary.
+- **Focus**: slows the capture cadence and nudges the assistant to surface one actionable observation so it stays out of your way.
+- **Accessibility**: prioritises descriptive narration, disables the fairy overlay, and keeps the experience voice-first for screen-reader flows.
 
 ## Extending
 - Swap in a different provider by adding a new `AIProvider` implementation (e.g., pointing to a local multimodal server) and injecting it through `AppController`.

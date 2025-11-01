@@ -13,10 +13,10 @@ struct OpenAIProvider: AIProvider, Sendable {
         self.session = session
     }
 
-    func sendContext(imageData: Data, metadata: CaptureMetadata) async throws -> AIResponse {
+    func sendContext(imageData: Data, metadata: CaptureMetadata, mode: InteractionMode) async throws -> AIResponse {
         let base64Image = imageData.base64EncodedString()
         var contentItems: [OpenAIMessage.OpenAIContent] = [
-            .text("New screenshot. React like their laid-back friend in 1–2 sentences (under ~35 words). Keep it natural, focus on what actually looks new, and only use an emoji when it genuinely adds something.")
+            .text(leadInPrompt(for: mode))
         ]
         if let hint = metadata.contextualHint() {
             contentItems.append(.text(hint))
@@ -24,9 +24,7 @@ struct OpenAIProvider: AIProvider, Sendable {
         let imageContent = OpenAIMessage.OpenAIContent.imageData("data:image/png;base64,\(base64Image)")
         contentItems.append(imageContent)
 
-        let systemPrompt = """
-        You are the user’s relaxed friend — warm, observant, conversational. Reply in at most two sentences and stay under 35 words. Make every response feel fresh: avoid recycled phrases, skip filler, and speak like a real person who just glanced at the screen. Trust the image above all else; treat hints as optional and ignore anything that doesn’t match what you see. Do not mention capture mechanics or old apps unless they are visibly present right now. Default to zero emojis; if you absolutely need one, use no more than a single emoji and make sure it earns its spot.
-        """
+        let systemPrompt = systemPrompt(for: mode)
 
         let requestPayload = OpenAIChatRequest(
             model: model,
@@ -81,6 +79,34 @@ struct OpenAIProvider: AIProvider, Sendable {
         } catch {
             throw AIProviderError.transportError(message: error.localizedDescription)
         }
+    }
+}
+
+private func leadInPrompt(for mode: InteractionMode) -> String {
+    switch mode {
+    case .casual:
+        return "New screenshot. React like their laid-back friend in 1–2 sentences (under ~35 words). Keep it natural, focus on what actually looks new, and only use an emoji when it genuinely adds something."
+    case .focus:
+        return "New screenshot. Deliver one concise, actionable suggestion (<25 words) that helps the user progress or tidy what’s on screen. Skip small talk and keep it practical."
+    case .accessibility:
+        return "New screenshot. Describe what’s visually present in clear, literal detail so a screen-reader user can understand the UI. Mention layout, key text, and alerts in ~40 words."
+    }
+}
+
+private func systemPrompt(for mode: InteractionMode) -> String {
+    switch mode {
+    case .casual:
+        return """
+        You are the user’s relaxed friend — warm, observant, conversational. Reply in at most two sentences and stay under 35 words. Make every response feel fresh: avoid recycled phrases, skip filler, and speak like a real person who just glanced at the screen. Trust the image above all else; treat hints as optional and ignore anything that doesn’t match what you see. Do not mention capture mechanics or old apps unless they are visibly present right now. Default to zero emojis; if you absolutely need one, use no more than a single emoji and make sure it earns its spot.
+        """
+    case .focus:
+        return """
+        You are a calm productivity coach. Give exactly one actionable observation that helps the user make progress. Be directive, specific, and under 25 words. Avoid fluff, questions, or emojis. If nothing stands out, say so briefly.
+        """
+    case .accessibility:
+        return """
+        You are a visual narrator for a screen-reader user. Describe the interface plainly and objectively in ~40 words. Mention window titles, key controls, alerts, and any prominent text. Avoid speculation, jokes, or instructions.
+        """
     }
 }
 
