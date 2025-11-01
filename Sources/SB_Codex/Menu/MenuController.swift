@@ -34,6 +34,27 @@ final class MenuController {
         let providerItem = NSMenuItem(title: "AI: \(appController.providerSummary)", action: nil, keyEquivalent: "")
         providerItem.isEnabled = false
         menu.addItem(providerItem)
+        if let stats = appController.tokenUsageStats {
+            if let last = stats.last {
+                let lastItem = NSMenuItem(title: tokensTitle(prefix: "Last", usage: last), action: nil, keyEquivalent: "")
+                lastItem.isEnabled = false
+                menu.addItem(lastItem)
+            }
+            let sessionItem = NSMenuItem(
+                title: tokensTitle(
+                    prefix: "Session",
+                    usage: TokenUsage(
+                        promptTokens: stats.totalPromptTokens,
+                        completionTokens: stats.totalCompletionTokens,
+                        totalTokens: stats.totalTokens
+                    )
+                ),
+                action: nil,
+                keyEquivalent: ""
+            )
+            sessionItem.isEnabled = false
+            menu.addItem(sessionItem)
+        }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
@@ -68,5 +89,9 @@ final class MenuController {
         overlayEnabled.toggle()
         overlayToggleHandler?(overlayEnabled)
         rebuildMenu()
+    }
+
+    private func tokensTitle(prefix: String, usage: TokenUsage) -> String {
+        "Tokens (\(prefix)): in \(usage.promptTokens) • out \(usage.completionTokens) • total \(usage.totalTokens)"
     }
 }

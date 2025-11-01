@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 voiceOutput.speak(response.text)
                 notificationDispatcher.deliver(body: response.text)
+                menuController.refresh()
             case .failure(let error):
                 Logger.error("AI Commentary failed: \(error.localizedDescription)")
                 notificationDispatcher.deliver(body: "⚠️ Commentary failed: \(error.localizedDescription)")

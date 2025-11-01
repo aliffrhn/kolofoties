@@ -7,11 +7,17 @@ APP_NAME="CursorCompanion"
 BUNDLE_ID="dev.cursorcompanion.app"
 APP_DIR="$HOME/Applications/${APP_NAME}.app"
 
-# Build the SwiftPM target
-swift build -c "$CONFIG" >/dev/null
+# Build the SwiftPM target unless explicitly skipped (for Xcode post-actions).
+if [[ "${SKIP_SWIFT_BUILD:-0}" != "1" ]]; then
+  swift build -c "$CONFIG" >/dev/null
+fi
 
-BIN_DIR=$(swift build -c "$CONFIG" --show-bin-path)
-BINARY_PATH="${BIN_DIR}/${PRODUCT_NAME}"
+if [[ -n "${EXISTING_BINARY_PATH:-}" ]]; then
+  BINARY_PATH="${EXISTING_BINARY_PATH}"
+else
+  BIN_DIR=$(swift build -c "$CONFIG" --show-bin-path)
+  BINARY_PATH="${BIN_DIR}/${PRODUCT_NAME}"
+fi
 
 if [[ ! -x "${BINARY_PATH}" ]]; then
   echo "Built binary not found at ${BINARY_PATH}" >&2

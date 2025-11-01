@@ -1,7 +1,21 @@
 import Foundation
 
+struct TokenUsage: Sendable {
+    let promptTokens: Int
+    let completionTokens: Int
+    let totalTokens: Int
+}
+
+struct TokenUsageStats: Sendable {
+    let last: TokenUsage?
+    let totalPromptTokens: Int
+    let totalCompletionTokens: Int
+    let totalTokens: Int
+}
+
 struct AIResponse: Sendable {
     let text: String
+    let usage: TokenUsage?
 }
 
 enum AIProviderError: Error, Sendable {

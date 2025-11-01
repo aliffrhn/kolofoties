@@ -69,5 +69,3 @@ If `swift build` fails due to sandbox restrictions (e.g., when caches under `~/L
 - Error handling currently surfaces via notifications; you might want backoff/retry logic for transient network issues.
 - Unit/UI tests are not wired up yet. The capture/AI layers should be factored for dependency injection to simplify testing.
 - Building via `swift build` may require additional toolchain setup if the installed SDK and compiler versions mismatch.
-
-Enjoy the sarcastic sidekick!

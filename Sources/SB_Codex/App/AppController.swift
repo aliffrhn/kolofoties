@@ -18,6 +18,10 @@ final class AppController {
     private var lastCursorLocation: CGPoint?
     private var lastCaptureMetadata: CaptureMetadata?
     private var lastForegroundBundleIdentifier: String?
+    private var sessionPromptTokens = 0
+    private var sessionCompletionTokens = 0
+    private var sessionTotalTokens = 0
+    private var lastTokenUsage: TokenUsage?
 
     private(set) var isActive: Bool = false {
         didSet {
@@ -33,6 +37,15 @@ final class AppController {
     var appConfiguration: AppConfiguration { configuration }
     var latestCursorLocation: CGPoint? { lastCursorLocation }
     var latestCaptureMetadata: CaptureMetadata? { lastCaptureMetadata }
+    var tokenUsageStats: TokenUsageStats? {
+        guard sessionTotalTokens > 0 else { return nil }
+        return TokenUsageStats(
+            last: lastTokenUsage,
+            totalPromptTokens: sessionPromptTokens,
+            totalCompletionTokens: sessionCompletionTokens,
+            totalTokens: sessionTotalTokens
+        )
+    }
 
     init() {
         configurationLoader.ensureDirectoryExists()
@@ -128,6 +141,7 @@ final class AppController {
                 guard let self else { return }
                 do {
                     let response = try await orchestrator.requestCommentary(for: artifact, metadata: enrichedMetadata)
+                    self.recordTokenUsage(response.usage)
                     self.dispatchCommentary(result: .success(response))
                 } catch {
                     self.dispatchCommentary(result: .failure(error))
@@ -153,6 +167,14 @@ final class AppController {
 
     private func dispatchCommentary(result: Result<AIResponse, Error>) {
         commentaryHandler?(result)
+    }
+
+    private func recordTokenUsage(_ usage: TokenUsage?) {
+        guard let usage else { return }
+        lastTokenUsage = usage
+        sessionPromptTokens += usage.promptTokens
+        sessionCompletionTokens += usage.completionTokens
+        sessionTotalTokens += usage.totalTokens
     }
 
     private func presentPermissionReminder(for status: PermissionStatus) {

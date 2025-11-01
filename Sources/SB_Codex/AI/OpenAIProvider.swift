@@ -57,12 +57,25 @@ struct OpenAIProvider: AIProvider, Sendable {
                 throw AIProviderError.httpError(statusCode: httpResponse.statusCode, body: errorMessage)
             }
 
-            let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let decoded = try decoder.decode(OpenAIChatResponse.self, from: data)
             guard let message = decoded.choices.first?.message.content else {
                 throw AIProviderError.invalidResponse
             }
 
-            return AIResponse(text: message.trimmingCharacters(in: .whitespacesAndNewlines))
+            let usage = decoded.usage.map { usage in
+                TokenUsage(
+                    promptTokens: usage.promptTokens,
+                    completionTokens: usage.completionTokens,
+                    totalTokens: usage.totalTokens
+                )
+            }
+
+            return AIResponse(
+                text: message.trimmingCharacters(in: .whitespacesAndNewlines),
+                usage: usage
+            )
         } catch let error as AIProviderError {
             throw error
         } catch {
@@ -117,4 +130,11 @@ private struct OpenAIChatResponse: Decodable {
     }
 
     let choices: [Choice]
+    let usage: Usage?
+
+    struct Usage: Decodable {
+        let promptTokens: Int
+        let completionTokens: Int
+        let totalTokens: Int
+    }
 }
